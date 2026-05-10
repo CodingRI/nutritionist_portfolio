@@ -1,0 +1,497 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+enum UserRole {
+  FREE_USER
+  CHAT_USER
+  APPOINTMENT_USER
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  ATHLETE
+}
+
+enum DietaryPreference {
+  VEG
+  VEGAN
+  NON_VEG
+  EGGETARIAN
+  KETO
+  OTHER
+}
+
+enum SubscriptionType {
+  CHAT
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED 
+}
+
+enum PaymentProvider {
+  RAZORPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum ChatSessionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CLOSED 
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  PDF
+  AUDIO
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum AppointmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAYMENT_PENDING
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum ConsultationType {
+  ONLINE
+  PHONE_CALL
+}
+
+enum NotificationType {
+  CHAT_MESSAGE
+  CHAT_REQUEST
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  APPOINTMENT_REQUEST
+  APPOINTMENT_APPROVED
+  APPOINTMENT_REMINDER
+  APPOINTMENT_CANCELLED
+}
+
+enum PaymentPurpose {
+  CHAT_SUBSCRIPTION
+  APPOINTMENT
+}
+
+
+
+model User {
+  id                      String              @id          @default(cuid())
+
+
+  email                   String              @unique
+  password                String?   
+  fullName                String
+  phoneNumber             String?             @unique
+
+  role                    UserRole            @default(FREE_USER)
+  whatsappNumber          String?             @unique
+
+  isVerified              Boolean             @default(false)
+  isBlocked               Boolean             @default(false)
+
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  profile                 Profile?
+  subscriptions           Subscription[]
+  payments                Payment[]
+
+  sentMessages            Message[]           @relation("SentMessages")
+  receivedMessages        Message[]           @relation("ReceivedMessages")
+
+  chatSessionsAsUser      ChatSession[]       @relation("UserChatSessions")
+  appointments            Appointment[]        
+
+  blogs                   Blog[]
+  recipes                 Recipe[]
+
+  blogComments            BlogComment[]
+  recipeComments          RecipeComment[]
+
+  blogLikes               BlogLike[]
+  recipeLikes             RecipeLike[]
+
+  notifications           Notification[]
+}
+
+
+
+model Profile {
+  id                      String              @id   @default(cuid())
+
+  userId                  String              @unique
+  user                    User                @relation(fields: [userId], references: [id])
+
+  age                     Int?
+  gender                  Gender?
+
+  heightCm                Float?
+  weightKg                Float?
+
+  activityLevel           ActivityLevel?
+
+  dietaryPreference       DietaryPreference?
+
+  allergies               String[]
+  medicalConditions       String[]
+
+  goals                   String[]
+  medications             String[]
+
+  sleepHours              Float?
+  waterIntakeLitres       Float?
+
+  notes                   String?
+
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+}
+
+
+
+model Subscription{
+  id                      String               @id    @default(cuid())
+
+  userId                  String                
+  user                    User                 @relation(fields: [userId], references: [id])
+
+  type                    SubscriptionType
+
+  status                  SubscriptionStatus   @default(PENDING)
+
+  startDate               DateTime?
+  expiryDate              DateTime?
+
+  isActive                Boolean              @default(false)
+
+  paymentId               String?              @unique
+  payment                 Payment?             @relation(fields: [paymentId], references: [id])
+  chatSessions             ChatSession[]
+
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+}
+
+
+model Payment {
+  id                      String               @id    @default(cuid())
+
+  userId                  String                
+  user                    User                 @relation(fields: [userId], references: [id]) 
+
+  amount                  Float
+  currency                String               @default("INR") 
+
+  provider                PaymentProvider
+
+  providerOrderId         String?
+  providerPaymentId       String?
+  providerSignature       String?
+
+  status                  PaymentStatus        @default(PENDING)
+
+  subscription            Subscription?
+  appointments            Appointment[]
+
+  purpose                 PaymentPurpose
+
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+}
+
+model ChatSession {
+  id                      String               @id    @default(cuid())
+
+  userId                  String
+  user                    User                 @relation("UserChatSessions", fields: [userId], references: [id])
+
+  subscriptionId          String?
+  subscription            Subscription?        @relation(fields: [subscriptionId], references: [id])
+
+  status                  ChatSessionStatus    @default(PENDING)
+
+  startedAt               DateTime?
+  endedAt                 DateTime?
+
+  expiresAt               DateTime?
+
+  lastMessageAt           DateTime?
+
+  unreadUserCount         Int                  @default(0)
+  unreadAdminCount        Int                  @default(0)
+
+  messages                Message[]
+
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Message {
+  id                      String               @id @default(cuid())
+
+  chatSessionId           String               
+  chatSession             ChatSession          @relation(fields: [chatSessionId], references: [id])
+
+  senderId                String
+  sender                  User                 @relation("SentMessages", fields: [senderId], references: [id])
+
+  receiverId              String
+  receiver                User                 @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  messageType             MessageType          @default(TEXT)
+
+  text                    String?
+
+  mediaUrl                String?
+
+  whatsappMessageId       String?
+
+  status                  MessageStatus         @default(SENT)
+
+  isRead                  Boolean               @default(false)
+
+  sentAt                  DateTime              @default(now())
+  readAt                  DateTime?
+
+  createdAt               DateTime              @default(now())
+
+  @@index([chatSessionId])
+  @@index([senderId])
+  @@index([receiverId])
+  
+}
+
+model Appointment {
+  id                      String                @id  @default(cuid())
+
+  userId                  String
+  user                    User                  @relation(fields: [userId], references: [id])
+
+  paymentId               String?              
+  payment                 Payment?              @relation(fields: [paymentId], references: [id])
+
+  status                  AppointmentStatus     @default(PENDING)
+
+  consultationType        ConsultationType      @default(ONLINE)
+
+  requestDate             DateTime?
+
+  scheduledStart           DateTime?
+  scheduledEnd             DateTime?
+
+  timeZone                String?
+
+  meetLink                String?
+
+  googleEventId           String?
+
+  adminNotes              String?
+
+  cancellationReason      String?
+
+  completedAt             DateTime?
+
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Notification {
+  id                      String                @id  @default(cuid())
+  userId                  String
+  user                    User                  @relation(fields: [userId], references: [id])
+
+  type                    NotificationType
+
+  title                   String
+  message                 String
+
+  isRead                  Boolean               @default(false)
+
+  relatedChatId           String?
+  relatedAppointmentId    String?
+
+  createdAt               DateTime              @default(now())
+
+  @@index([userId, isRead])
+
+}
+
+model Blog {
+  id                      String                @id @default(cuid())
+
+  authorId                String
+  author                  User                  @relation(fields: [authorId], references: [id])
+
+  title                   String
+  slug                    String                @unique
+
+  excerpt                 String?
+
+  content                 String
+
+  coverImage              String?
+
+  isPublished             Boolean               @default(false)
+
+  publishedAt             DateTime?
+
+  tags                    String[]
+
+  readTime                Int?
+
+  views                   Int                   @default(0)
+
+  comments                BlogComment[]
+  likes                   BlogLike[]
+
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+}
+
+model Recipe {
+  id                      String                @id @default(cuid())
+
+  authorId                String
+  author                  User                  @relation(fields: [authorId], references: [id])
+
+  title                   String
+  slug                    String                @unique
+
+  description             String?
+
+  ingredients             String[]
+  instructions            String[]
+
+  preparationTime         Int?
+  cookingTime             Int?
+
+  calories                Int?
+
+  coverImage              String?
+
+  dietaryTags             String[]
+
+  isPublished             Boolean               @default(false)
+
+  publishedAt             DateTime?
+
+  views                   Int                   @default(0)
+
+  comments                RecipeComment[]
+  likes                   RecipeLike[]
+
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+}
+
+model BlogComment {
+  id                  String                    @id @default(cuid())
+
+  blogId              String
+  blog                Blog                      @relation(fields: [blogId], references: [id])
+
+  userId              String
+  user                User                      @relation(fields: [userId], references: [id])
+
+  content             String
+
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+}
+
+model RecipeComment {
+  id                  String                    @id @default(cuid())
+
+  recipeId            String
+  recipe              Recipe                    @relation(fields: [recipeId], references: [id])
+
+  userId              String
+  user                User                      @relation(fields: [userId], references: [id])
+
+  content             String
+
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+}
+
+model BlogLike {
+  id                  String                    @id @default(cuid())
+
+  blogId              String
+  blog                Blog                      @relation(fields: [blogId], references: [id])
+
+  userId              String
+  user                User                      @relation(fields: [userId], references: [id])
+
+  createdAt           DateTime                  @default(now())
+
+  @@unique([blogId, userId])
+}
+
+model RecipeLike {
+  id                  String                    @id @default(cuid())
+
+  recipeId            String
+  recipe              Recipe                    @relation(fields: [recipeId], references: [id])
+
+  userId              String
+  user                User                      @relation(fields: [userId], references: [id])
+
+  createdAt           DateTime                  @default(now())
+
+  @@unique([recipeId, userId])
+}

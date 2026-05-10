@@ -1,24 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef} from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { MessageCircle, X, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-const quickReplies = [
-  "What services do you offer?",
-  "How can I book an appointment?",
-  "What are your consultation fees?",
-  "Do you offer online consultations?",
-]
+// const quickReplies = [
+//   "What services do you offer?",
+//   "How can I book an appointment?",
+//   "What are your consultation fees?",
+//   "Do you offer online consultations?",
+// ]
 
-const responses: Record<string, string> = {
-  "What services do you offer?": "I offer a range of services including weight management, metabolic health optimization, gut health improvement, prenatal nutrition, heart health, and sports nutrition. Each plan is personalized to your unique needs!",
-  "How can I book an appointment?": "You can book an appointment by clicking the 'Book Consultation' button on this website, or send me a message with your preferred date and time!",
-  "What are your consultation fees?": "My consultation fees vary based on the type of service. Initial consultations start at $150. Contact me for a detailed pricing guide!",
-  "Do you offer online consultations?": "Yes! I offer both in-person and online consultations via video call. Online sessions are perfect for clients who prefer the convenience of meeting from home.",
-}
+// const responses: Record<string, string> = {
+//   "What services do you offer?": "I offer a range of services including weight management, metabolic health optimization, gut health improvement, prenatal nutrition, heart health, and sports nutrition. Each plan is personalized to your unique needs!",
+//   "How can I book an appointment?": "You can book an appointment by clicking the 'Book Consultation' button on this website, or send me a message with your preferred date and time!",
+//   "What are your consultation fees?": "My consultation fees vary based on the type of service. Initial consultations start at $150. Contact me for a detailed pricing guide!",
+//   "Do you offer online consultations?": "Yes! I offer both in-person and online consultations via video call. Online sessions are perfect for clients who prefer the convenience of meeting from home.",
+// }
 
 interface Message {
   id: number
@@ -33,28 +33,84 @@ export function ChatWidget() {
   ])
   const [inputValue, setInputValue] = useState("")
 
-  const handleQuickReply = (reply: string) => {
-    const userMessage: Message = { id: Date.now(), text: reply, isUser: true }
-    const botResponse: Message = {
-      id: Date.now() + 1,
-      text: responses[reply] || "Thanks for your message! I'll get back to you soon.",
-      isUser: false,
-    }
-    setMessages((prev) => [...prev, userMessage, botResponse])
-  }
+  const socketRef = useRef<WebSocket | null>(null)
+
+  // const handleQuickReply = (reply: string) => {
+  //   const userMessage: Message = { id: Date.now(), text: reply, isUser: true }
+  //   const botResponse: Message = {
+  //     id: Date.now() + 1,
+  //     text: responses[reply] || "Thanks for your message! I'll get back to you soon.",
+  //     isUser: false,
+  //   }
+  //   setMessages((prev) => [...prev, userMessage, botResponse])
+  // }
 
   const handleSend = () => {
-    if (!inputValue.trim()) return
-    const userMessage: Message = { id: Date.now(), text: inputValue, isUser: true }
-    const botResponse: Message = {
-      id: Date.now() + 1,
-      text: "Thanks for reaching out! I'll respond to your message shortly. In the meantime, feel free to explore my services or book a consultation.",
-      isUser: false,
+    if (!inputValue.trim() || !socketRef.current) return
+  
+    const message = {
+      text: inputValue,
+      sender: "user",
     }
-    setMessages((prev) => [...prev, userMessage, botResponse])
+  
+    socketRef.current?.send(JSON.stringify({
+      type: "chat",
+      text: inputValue,
+      from: "user-123",
+      to: "nutritionist-1"
+    }))
+  
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        text: inputValue,
+        isUser: true,
+      },
+    ])
+  
     setInputValue("")
   }
 
+  useEffect(() => {
+    const socket = new WebSocket("ws://localhost:5000")
+    socketRef.current = socket
+  
+    socket.onopen = () => {
+      console.log("Connected to WS server")
+
+      socket.send(JSON.stringify({
+        type: "init",
+        role: "user",
+        userId: "user-123"
+      }))
+    }
+  
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+  
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          text: data.text,
+          isUser: data.sender === "user",
+        },
+      ])
+    }
+  
+    socket.onerror = (err) => {
+      console.error("WebSocket error:", err)
+    }
+  
+    socket.onclose = () => {
+      console.log("Disconnected")
+    }
+  
+    return () => {
+      socket.close()
+    }
+  }, [])
   return (
     <>
       {/* Chat Button */}
@@ -123,7 +179,7 @@ export function ChatWidget() {
             </div>
 
             {/* Quick Replies */}
-            <div className="px-4 pb-2">
+            {/* <div className="px-4 pb-2">
               <div className="flex flex-wrap gap-2">
                 {quickReplies.slice(0, 2).map((reply) => (
                   <button
@@ -135,7 +191,7 @@ export function ChatWidget() {
                   </button>
                 ))}
               </div>
-            </div>
+            </div> */}
 
             {/* Input */}
             <div className="p-4 border-t border-border">
