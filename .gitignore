@@ -11,6 +11,7 @@ pnpm-debug.log*
 
 # env
 .env
+.env.local
 
 # misc
 .DS_Store

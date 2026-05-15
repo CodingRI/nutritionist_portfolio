@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
+import {ClerkProvider} from "@clerk/nextjs"
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -51,6 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    <ClerkProvider>
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} bg-background`}
@@ -64,10 +66,14 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Navbar />
-          <main className="pt-20">{children}</main>
+          <main className="pt-20">
+            {children}
+            </main>
+          
         </ThemeProvider>
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
+    </ClerkProvider>
   );
 }

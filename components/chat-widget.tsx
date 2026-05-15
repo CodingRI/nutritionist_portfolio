@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef} from "react"
+import { useState,  useRef} from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { MessageCircle, X, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -33,7 +33,7 @@ export function ChatWidget() {
   ])
   const [inputValue, setInputValue] = useState("")
 
-  const socketRef = useRef<WebSocket | null>(null)
+
 
   // const handleQuickReply = (reply: string) => {
   //   const userMessage: Message = { id: Date.now(), text: reply, isUser: true }
@@ -46,19 +46,7 @@ export function ChatWidget() {
   // }
 
   const handleSend = () => {
-    if (!inputValue.trim() || !socketRef.current) return
-  
-    const message = {
-      text: inputValue,
-      sender: "user",
-    }
-  
-    socketRef.current?.send(JSON.stringify({
-      type: "chat",
-      text: inputValue,
-      from: "user-123",
-      to: "nutritionist-1"
-    }))
+    if (!inputValue.trim() ) return
   
     setMessages((prev) => [
       ...prev,
@@ -72,45 +60,6 @@ export function ChatWidget() {
     setInputValue("")
   }
 
-  useEffect(() => {
-    const socket = new WebSocket("ws://localhost:5000")
-    socketRef.current = socket
-  
-    socket.onopen = () => {
-      console.log("Connected to WS server")
-
-      socket.send(JSON.stringify({
-        type: "init",
-        role: "user",
-        userId: "user-123"
-      }))
-    }
-  
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-  
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          text: data.text,
-          isUser: data.sender === "user",
-        },
-      ])
-    }
-  
-    socket.onerror = (err) => {
-      console.error("WebSocket error:", err)
-    }
-  
-    socket.onclose = () => {
-      console.log("Disconnected")
-    }
-  
-    return () => {
-      socket.close()
-    }
-  }, [])
   return (
     <>
       {/* Chat Button */}

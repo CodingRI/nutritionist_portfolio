@@ -123,7 +123,7 @@ enum PaymentPurpose {
 model User {
   id                      String              @id          @default(cuid())
 
-
+  clerkId                 String?             @unique
   email                   String              @unique
   password                String?   
   fullName                String
