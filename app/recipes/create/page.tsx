@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Plus, X } from 'lucide-react';
+import { RoleGuard } from '@/components/role-guard';
 
 export default function CreateRecipePage() {
   const [title, setTitle] = useState('');
@@ -73,6 +74,15 @@ export default function CreateRecipePage() {
   };
 
   return (
+    <RoleGuard 
+    allowedRoles={["ADMIN"]}
+    fallback = {
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-red-500">
+          You are not authorized to access this page.
+        </p>
+      </div>
+    }>
     <div className="min-h-screen py-20">
       <div className="section-container max-w-4xl">
         {/* Back Button */}
@@ -297,5 +307,7 @@ export default function CreateRecipePage() {
         </motion.div>
       </div>
     </div>
+
+    </RoleGuard>
   );
 }

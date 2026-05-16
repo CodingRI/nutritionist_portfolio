@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Type, FileText, Tag } from 'lucide-react';
+import { RoleGuard } from '@/components/role-guard';
 
 export default function WriteBlogPage() {
   const [title, setTitle] = useState('');
@@ -16,13 +17,23 @@ export default function WriteBlogPage() {
   };
 
   return (
+    <RoleGuard 
+    allowedRoles={["ADMIN"]}
+    fallback = {
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-red-500">
+          You are not authorized to access this page.
+        </p>
+      </div>
+    }>
+
     <div className="min-h-screen py-20">
       <div className="section-container max-w-4xl">
         {/* Back Button */}
         <Link
           href="/blogs"
           className="inline-flex items-center gap-2 text-primary hover:text-primary-light transition-colors mb-8"
-        >
+          >
           <ArrowLeft size={20} />
           Back to Blogs
         </Link>
@@ -31,7 +42,7 @@ export default function WriteBlogPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-        >
+          >
           <h1 className="text-4xl font-serif font-bold text-foreground mb-12">
             Write a New Blog Post
           </h1>
@@ -49,7 +60,7 @@ export default function WriteBlogPage() {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Enter your blog title..."
                 className="w-full px-4 py-3 rounded-lg bg-background text-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary text-lg font-serif"
-              />
+                />
               <p className="text-sm text-muted-foreground mt-2">
                 Make it descriptive and engaging
               </p>
@@ -65,7 +76,7 @@ export default function WriteBlogPage() {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-4 py-3 rounded-lg bg-background text-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-              >
+                >
                 <option value="Nutrition">Nutrition</option>
                 <option value="Wellness">Wellness</option>
                 <option value="Health">Health</option>
@@ -85,7 +96,7 @@ export default function WriteBlogPage() {
                 placeholder="Write a brief excerpt that will appear in the blog list..."
                 className="w-full px-4 py-3 rounded-lg bg-background text-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 rows={3}
-              />
+                />
               <p className="text-sm text-muted-foreground mt-2">
                 {excerpt.length}/200 characters
               </p>
@@ -103,7 +114,7 @@ export default function WriteBlogPage() {
                 placeholder="Write your blog content here. Use markdown for formatting..."
                 className="w-full px-4 py-3 rounded-lg bg-background text-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary resize-none font-mono text-sm"
                 rows={12}
-              />
+                />
               <p className="text-sm text-muted-foreground mt-2">
                 Markdown formatting supported
               </p>
@@ -115,7 +126,7 @@ export default function WriteBlogPage() {
                 onClick={handlePublish}
                 disabled={!title || !content}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex-1"
-              >
+                >
                 Publish Post
               </button>
               <Link href="/blogs" className="btn-secondary flex-1 text-center">
@@ -130,7 +141,7 @@ export default function WriteBlogPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-          >
+            >
             <h3 className="font-serif text-lg font-bold text-foreground mb-4">
               Tips for Great Blog Posts
             </h3>
@@ -145,5 +156,6 @@ export default function WriteBlogPage() {
         </motion.div>
       </div>
     </div>
+  </RoleGuard>
   );
 }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { recipes } from '@/lib/recipes-data';
+import { RoleGuard } from '@/components/role-guard';
 import { RecipeCard } from '@/components/recipe-card';
 
 const DIFFICULTIES = ['All', 'Easy', 'Medium', 'Hard'] as const;
@@ -31,13 +32,16 @@ export default function RecipesPage() {
           <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
             Delicious, nutritious recipes designed to support your wellness goals
           </p>
+          <RoleGuard allowedRoles={['ADMIN']}>
+
           <Link
             href="/recipes/create"
             className="btn-primary inline-flex items-center gap-2"
-          >
+            >
             <Plus size={20} />
             Share Your Recipe
           </Link>
+            </RoleGuard>
         </motion.div>
 
         {/* Filters */}

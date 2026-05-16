@@ -6,6 +6,9 @@ import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Clock, Plus } from 'lucide-react';
 import { CardContent } from '@/components/ui/card';
 import { LivelyCard } from '@/components/ui/lively-card';
+import { RoleGuard } from '@/components/role-guard';
+import { useUser } from '@clerk/nextjs';
+import { useUserRole } from '@/hooks/useUserRole';
 import { blogs } from '@/lib/blogs-data';
 
 const PAGE_SIZE = 6;
@@ -13,6 +16,15 @@ const PAGE_SIZE = 6;
 export default function BlogsPage() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const userRole = useUserRole();
+  const { user } = useUser();
+
+console.log('USER ROLE:', userRole);
+console.log('CLERK PUBLIC METADATA:', user?.publicMetadata);
+console.log('CLERK USER ID:', user?.id);
+console.log('CLERK EMAIL:', user?.primaryEmailAddress?.emailAddress);
+  
 
   const loadMore = useCallback(() => {
     setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, blogs.length));
@@ -48,13 +60,16 @@ export default function BlogsPage() {
           <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
             Expert advice, research-backed tips, and inspiring stories to support your health journey
           </p>
+          <RoleGuard allowedRoles={['ADMIN']}>
+
           <Link
             href="/blogs/write"
             className="btn-primary inline-flex items-center gap-2"
-          >
+            >
             <Plus size={20} />
             Write a Blog Post
           </Link>
+        </RoleGuard>
         </motion.div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
