@@ -1,432 +1,650 @@
-'use client';
+"use client";
 
-// app/about-user/page.tsx
-// Post-signup onboarding — 4 steps.
-// Matches your Prisma schema exactly:
-//   User.fullName, User.phoneNumber
-//   Profile.age (Int, derived from DOB), Profile.gender (Gender enum),
-//   Profile.dietaryPreference (DietaryPreference enum), Profile.goals (String[])
+// app/profile/page.tsx
+// Shows the user's full profile fetched from the DB.
+// If onboarding not complete (no profile row), redirects to /about-user.
+// Edit button opens an inline edit panel that PATCHes /api/user/profile.
 
-import React, { useState, useRef } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useRef } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import {
-  Camera,
-  ChevronRight,
-  ChevronLeft,
-  Check,
-  Loader2,
-} from 'lucide-react';
-import Image from 'next/image';
-
-// ─── Constants (mapped to your enums) ────────────────────────────────────────
-
-const HEALTH_GOALS = [
-  'Weight Loss',
-  'Muscle Gain',
-  'Gut Health',
-  'Manage Diabetes',
-  'Heart Health',
-  'Boost Immunity',
-  'Better Sleep',
-  'Reduce Stress',
-  'General Wellness',
-];
-
-// Values match DietaryPreference enum
-const DIETARY_OPTIONS: { label: string; value: string }[] = [
-  { label: 'Vegetarian',     value: 'VEG' },
-  { label: 'Vegan',          value: 'VEGAN' },
-  { label: 'Non-Vegetarian', value: 'NON_VEG' },
-  { label: 'Eggetarian',     value: 'EGGETARIAN' },
-  { label: 'Keto',           value: 'KETO' },
-  { label: 'Other',          value: 'OTHER' },
-];
-
-// Values match Gender enum
-const GENDER_OPTIONS: { label: string; value: string }[] = [
-  { label: 'Male',              value: 'MALE' },
-  { label: 'Female',            value: 'FEMALE' },
-  { label: 'Other / Prefer not to say', value: 'OTHER' },
-];
-
-const TOTAL_STEPS = 4;
+  User, Phone, Mail, Edit3, Check, X, Loader2,
+  Activity, Droplets, Moon, Ruler, Weight,
+  Heart, Leaf, AlertCircle, StickyNote, Calendar,
+  Shield, ChevronRight,
+} from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import { PageLoader } from "@/components/ui/page-loader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface FormState {
-  fullName: string;
-  dob: string;            // ISO date string — converted to age on server
-  gender: string;         // Gender enum value
-  phoneNumber: string;    // raw 10 digits, prefixed to +91 on submit
-  healthGoals: string[];  // stored in Profile.goals
-  dietaryPref: string;    // DietaryPreference enum value
-  avatarFile: File | null;
-  avatarPreview: string | null;
+interface UserProfile {
+  id:          string;
+  fullName:    string;
+  email:       string;
+  phoneNumber: string | null;
+  role:        string;
+  createdAt:   string;
+  profile: {
+    age:               number | null;
+    gender:            string | null;
+    heightCm:          number | null;
+    weightKg:          number | null;
+    activityLevel:     string | null;
+    dietaryPreference: string | null;
+    allergies:         string[];
+    medicalConditions: string[];
+    goals:             string[];
+    sleepHours:        number | null;
+    waterIntakeLitres: number | null;
+    notes:             string | null;
+  } | null;
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const GENDER_LABELS: Record<string, string> = {
+  MALE: "Male", FEMALE: "Female", OTHER: "Other",
+};
+
+const DIETARY_LABELS: Record<string, string> = {
+  VEG: "Vegetarian", VEGAN: "Vegan", NON_VEG: "Non-Vegetarian",
+  EGGETARIAN: "Eggetarian", KETO: "Keto", OTHER: "Other",
+};
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  SEDENTARY: "Sedentary", LIGHT: "Light", MODERATE: "Moderate",
+  ACTIVE: "Active", ATHLETE: "Athlete",
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  FREE_USER: "Free", CHAT_USER: "Chat Member",
+  APPOINTMENT_USER: "Appointment Member", ADMIN: "Admin",
+};
+
+const HEALTH_GOALS = [
+  "Weight Loss","Muscle Gain","Gut Health","Manage Diabetes",
+  "Heart Health","Boost Immunity","Better Sleep","Reduce Stress","General Wellness",
+];
+
+const DIETARY_OPTIONS = [
+  { label: "Vegetarian",     value: "VEG"       },
+  { label: "Vegan",          value: "VEGAN"     },
+  { label: "Non-Vegetarian", value: "NON_VEG"   },
+  { label: "Eggetarian",     value: "EGGETARIAN"},
+  { label: "Keto",           value: "KETO"      },
+  { label: "Other",          value: "OTHER"     },
+];
+
+const ACTIVITY_OPTIONS = [
+  { label: "Sedentary (little/no exercise)", value: "SEDENTARY" },
+  { label: "Light (1-3 days/week)",          value: "LIGHT"     },
+  { label: "Moderate (3-5 days/week)",       value: "MODERATE"  },
+  { label: "Active (6-7 days/week)",         value: "ACTIVE"    },
+  { label: "Athlete (2x/day)",               value: "ATHLETE"   },
+];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function AboutUserPage() {
-  const { user, isLoaded } = useUser();
+export default function ProfilePage() {
+  const { user: clerkUser, isLoaded } = useUser();
   const router = useRouter();
+
+  const [profile,  setProfile]  = useState<UserProfile | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [editing,  setEditing]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState("");
+  const [success,  setSuccess]  = useState(false);
+
+  // Avatar upload
   const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile,    setAvatarFile]    = useState<File | null>(null);
 
-  const [step, setStepp] = useState(1);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const setStep = (n: number) => { setStepp(n); setError(''); };
-
-  const [form, setForm] = useState<FormState>({
-    fullName:     user?.fullName ?? '',
-    dob:          '',
-    gender:       '',
-    phoneNumber:  user?.primaryPhoneNumber?.phoneNumber?.replace('+91', '') ?? '',
-    healthGoals:  [],
-    dietaryPref:  '',
-    avatarFile:   null,
-    avatarPreview: user?.imageUrl ?? null,
+  // Edit form state — mirrors profile fields
+  const [form, setForm] = useState({
+    fullName:          "",
+    phoneNumber:       "",
+    dob:               "",           // we store age, but let user pick DOB to update it
+    gender:            "",
+    dietaryPref:       "",
+    activityLevel:     "",
+    healthGoals:       [] as string[],
+    heightCm:          "",
+    weightKg:          "",
+    allergies:         "",           // comma-separated string in UI
+    medicalConditions: "",
+    sleepHours:        "",
+    waterIntakeLitres: "",
+    notes:             "",
   });
 
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="animate-spin text-primary" size={32} />
-      </div>
-    );
-  }
+  // ── Fetch profile on mount ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!clerkUser) { router.push("/"); return; }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
+    async function load() {
+      const res  = await fetch("/api/user/profile");
+      const data = await res.json();
 
-  const toggle = (arr: string[], item: string) =>
-    arr.includes(item) ? arr.filter((v) => v !== item) : [...arr, item];
-
-  const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setForm((f) => ({
-      ...f,
-      avatarFile: file,
-      avatarPreview: URL.createObjectURL(file),
-    }));
-  };
-
-  const canProceed = (): boolean => {
-    if (step === 1) return !!form.fullName.trim() && !!form.dob && !!form.gender;
-    if (step === 2) return true;   // phone is optional
-    if (step === 3) return form.healthGoals.length > 0;
-    if (step === 4) return !!form.dietaryPref;
-    return true;
-  };
-
-  // ── Submit ────────────────────────────────────────────────────────────────────
-
-  const handleSubmit = async () => {
-    setSaving(true);
-    setError('');
-
-    try {
-      // 1. Upload avatar to Clerk
-      if (form.avatarFile) {
-        await user?.setProfileImage({ file: form.avatarFile });
+      if (!data.success || !data.user) {
+        // No profile yet → send to onboarding
+        router.push("/about-user");
+        return;
       }
 
-      // 2. Update Clerk display name
-      const nameParts = form.fullName.trim().split(' ');
-      await user?.update({
-        firstName: nameParts[0] ?? '',
-        lastName:  nameParts.slice(1).join(' ') ?? '',
-        unsafeMetadata: { onboardingComplete: true },
+      setProfile(data.user);
+      setAvatarPreview(clerkUser?.imageUrl ?? null);
+
+      // Seed edit form with current values
+      const p = data.user.profile;
+      setForm({
+        fullName:          data.user.fullName ?? "",
+        phoneNumber:       (data.user.phoneNumber ?? "").replace("+91", ""),
+        dob:               "",
+        gender:            p?.gender            ?? "",
+        dietaryPref:       p?.dietaryPreference ?? "",
+        activityLevel:     p?.activityLevel     ?? "",
+        healthGoals:       p?.goals             ?? [],
+        heightCm:          p?.heightCm          ? String(p.heightCm) : "",
+        weightKg:          p?.weightKg          ? String(p.weightKg) : "",
+        allergies:         (p?.allergies         ?? []).join(", "),
+        medicalConditions: (p?.medicalConditions ?? []).join(", "),
+        sleepHours:        p?.sleepHours        ? String(p.sleepHours)        : "",
+        waterIntakeLitres: p?.waterIntakeLitres ? String(p.waterIntakeLitres) : "",
+        notes:             p?.notes             ?? "",
       });
 
-      // 3. Save to your Prisma/Neon DB
-      const res = await fetch('/api/user/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      setLoading(false);
+    }
+
+    load();
+  }, [isLoaded, clerkUser, router]);
+
+  // ── Avatar handler ─────────────────────────────────────────────────────────
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  // ── Toggle goal ────────────────────────────────────────────────────────────
+  const toggleGoal = (goal: string) =>
+    setForm((f) => ({
+      ...f,
+      healthGoals: f.healthGoals.includes(goal)
+        ? f.healthGoals.filter((g) => g !== goal)
+        : [...f.healthGoals, goal],
+    }));
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    setSuccess(false);
+
+    try {
+      // 1. Update avatar in Clerk if changed
+      if (avatarFile) {
+        await clerkUser?.setProfileImage({ file: avatarFile });
+      }
+
+      // 2. Update display name in Clerk
+      const nameParts = form.fullName.trim().split(" ");
+      await clerkUser?.update({
+        firstName: nameParts[0] ?? "",
+        lastName:  nameParts.slice(1).join(" ") ?? "",
+      });
+
+      // 3. PATCH the DB
+      const res = await fetch("/api/user/profile", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName:    form.fullName,
-          email:       user?.primaryEmailAddress?.emailAddress,
-          phoneNumber: form.phoneNumber ? `+91${form.phoneNumber}` : undefined,
-          dob:         form.dob,
-          gender:      form.gender,       // "MALE" | "FEMALE" | "OTHER"
-          healthGoals: form.healthGoals,
-          dietaryPref: form.dietaryPref,  // "VEG" | "VEGAN" | etc.
+          fullName:          form.fullName,
+          phoneNumber:       form.phoneNumber ? `+91${form.phoneNumber.replace(/\D/g,"")}` : "",
+          dob:               form.dob         || undefined,
+          gender:            form.gender       || undefined,
+          dietaryPref:       form.dietaryPref  || undefined,
+          activityLevel:     form.activityLevel || undefined,
+          healthGoals:       form.healthGoals,
+          heightCm:          form.heightCm     || undefined,
+          weightKg:          form.weightKg     || undefined,
+          allergies:         form.allergies
+                               ? form.allergies.split(",").map((s) => s.trim()).filter(Boolean)
+                               : [],
+          medicalConditions: form.medicalConditions
+                               ? form.medicalConditions.split(",").map((s) => s.trim()).filter(Boolean)
+                               : [],
+          sleepHours:        form.sleepHours        || undefined,
+          waterIntakeLitres: form.waterIntakeLitres || undefined,
+          notes:             form.notes,
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? 'Failed to save profile');
-      }
+      if (!res.ok) throw new Error("Failed to save");
 
-      router.push('/');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save. Try again.');
+      // 4. Refetch profile to show updated values
+      const updated = await fetch("/api/user/profile");
+      const data    = await updated.json();
+      if (data.success) setProfile(data.user);
+
+      setEditing(false);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+      setAvatarFile(null);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
-  // ─── Step content ──────────────────────────────────────────────────────────────
+  // ─── Loading ───────────────────────────────────────────────────────────────
+  if (!isLoaded || loading) return <PageLoader inline label="Loading profile…" />;
+  if (!profile)             return null;
 
-  const Step1 = (
-    <div className="space-y-5">
-      <div className="text-center">
-        <h1 className="text-2xl font-serif font-bold text-foreground">Set up your profile</h1>
-        <p className="text-muted-foreground text-sm mt-1">Tell us a bit about yourself</p>
-      </div>
+  const p = profile.profile;
 
-      {/* Avatar */}
-      <div className="flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-dashed border-border hover:border-primary transition-colors group"
-        >
-          {form.avatarPreview ? (
-            <Image src={form.avatarPreview} alt="Avatar" fill className="object-cover" />
-          ) : (
-            <div className="w-full h-full bg-muted flex items-center justify-center">
-              <Camera size={24} className="text-muted-foreground" />
+  // ─── View mode ─────────────────────────────────────────────────────────────
+
+  if (!editing) {
+    return (
+      <div className="min-h-screen py-20 bg-background">
+        <div className="section-container max-w-3xl">
+
+          {success && (
+            <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 text-sm">
+              <Check size={16} /> Profile updated successfully
             </div>
           )}
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Camera size={20} className="text-white" />
-          </div>
-        </button>
-        <p className="text-xs text-muted-foreground">Tap to upload photo</p>
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
-      </div>
 
-      {/* Full name */}
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-2">Full Name *</label>
-        <input
-          type="text"
-          value={form.fullName}
-          onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-          className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          placeholder="Your full name"
-        />
-      </div>
-
-      {/* DOB */}
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-2">Date of Birth *</label>
-        <input
-          type="date"
-          value={form.dob}
-          onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
-          max={new Date(Date.now() - 13 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-          className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-      </div>
-
-      {/* Gender */}
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-2">Gender *</label>
-        <div className="grid grid-cols-3 gap-2">
-          {GENDER_OPTIONS.map(({ label, value }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, gender: value }))}
-              className={`py-2.5 px-3 rounded-xl border text-sm font-medium transition-all ${
-                form.gender === value
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-background text-foreground hover:border-primary/50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const Step2 = (
-    <div className="space-y-5">
-      <div className="text-center">
-        <h1 className="text-2xl font-serif font-bold text-foreground">Contact number</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Used for appointment reminders &amp; WhatsApp consultations
-        </p>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-2">
-          Phone Number <span className="text-muted-foreground font-normal">(optional)</span>
-        </label>
-        <div className="flex gap-2">
-          <span className="flex items-center px-3 rounded-xl border border-border bg-muted text-sm text-muted-foreground">
-            +91
-          </span>
-          <input
-            type="tel"
-            value={form.phoneNumber}
-            onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value.replace(/\D/g, '') }))}
-            maxLength={10}
-            className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder="98765 43210"
-          />
-        </div>
-      </div>
-
-      <div className="rounded-xl bg-muted p-4 text-sm flex gap-3">
-        <span className="text-2xl">💬</span>
-        <div>
-          <p className="font-medium text-foreground">WhatsApp consultations</p>
-          <p className="mt-0.5 text-muted-foreground">
-            Paid users can message their nutritionist directly on WhatsApp.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-
-  const Step3 = (
-    <div className="space-y-5">
-      <div className="text-center">
-        <h1 className="text-2xl font-serif font-bold text-foreground">What are your goals?</h1>
-        <p className="text-muted-foreground text-sm mt-1">Select all that apply</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        {HEALTH_GOALS.map((goal) => (
-          <button
-            key={goal}
-            type="button"
-            onClick={() => setForm((f) => ({ ...f, healthGoals: toggle(f.healthGoals, goal) }))}
-            className={`py-3 px-4 rounded-xl border text-sm font-medium text-left transition-all ${
-              form.healthGoals.includes(goal)
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-background text-foreground hover:border-primary/50'
-            }`}
-          >
-            {form.healthGoals.includes(goal) && <Check size={12} className="inline mr-1.5" />}
-            {goal}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  const Step4 = (
-    <div className="space-y-5">
-      <div className="text-center">
-        <h1 className="text-2xl font-serif font-bold text-foreground">Dietary preference</h1>
-        <p className="text-muted-foreground text-sm mt-1">Choose one that best describes you</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        {DIETARY_OPTIONS.map(({ label, value }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setForm((f) => ({ ...f, dietaryPref: value }))}
-            className={`py-3 px-4 rounded-xl border text-sm font-medium text-left transition-all ${
-              form.dietaryPref === value
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border bg-background text-foreground hover:border-primary/50'
-            }`}
-          >
-            {form.dietaryPref === value && <Check size={12} className="inline mr-1.5" />}
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  const steps = [Step1, Step2, Step3, Step4];
-
-  // ─── Render ───────────────────────────────────────────────────────────────────
-
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-
-        {/* Step indicator */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-            <React.Fragment key={i}>
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all ${
-                  i + 1 < step
-                    ? 'bg-primary text-primary-foreground'
-                    : i + 1 === step
-                    ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
-                    : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                {i + 1 < step ? <Check size={14} /> : i + 1}
+          {/* Header card */}
+          <div className="bg-card rounded-2xl border border-border p-6 mb-6 flex items-start gap-5">
+            <div className="relative flex-shrink-0">
+              <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-border">
+                {avatarPreview ? (
+                  <Image src={avatarPreview} alt={profile.fullName} fill className="object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+                    <User size={28} className="text-primary" />
+                  </div>
+                )}
               </div>
-              {i < TOTAL_STEPS - 1 && (
-                <div className={`h-0.5 w-8 transition-all ${i + 1 < step ? 'bg-primary' : 'bg-muted'}`} />
+              <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
+                {ROLE_LABELS[profile.role] ?? profile.role}
+              </span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-serif font-bold text-foreground">{profile.fullName}</h1>
+              <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <Mail size={13} /> {profile.email}
+                </span>
+                {profile.phoneNumber && (
+                  <span className="flex items-center gap-1.5">
+                    <Phone size={13} /> {profile.phoneNumber}
+                  </span>
+                )}
+              </div>
+              {p?.gender && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {GENDER_LABELS[p.gender] ?? p.gender}
+                  {p.age ? `, ${p.age} yrs` : ""}
+                </p>
               )}
-            </React.Fragment>
-          ))}
-        </div>
+            </div>
 
-        <div className="bg-card rounded-2xl border border-border shadow-xl p-8">
-          {steps[step - 1]}
+            <button
+              onClick={() => setEditing(true)}
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <Edit3 size={14} /> Edit
+            </button>
+          </div>
 
-          {error && (
-            <p className="mt-4 text-sm text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">
-              {error}
-            </p>
+          {/* Stats row */}
+          {(p?.heightCm || p?.weightKg || p?.activityLevel) && (
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {p?.heightCm && (
+                <div className="bg-card rounded-xl border border-border p-4 text-center">
+                  <Ruler size={18} className="text-primary mx-auto mb-1" />
+                  <p className="text-xl font-bold text-foreground">{p.heightCm}<span className="text-xs text-muted-foreground ml-0.5">cm</span></p>
+                  <p className="text-xs text-muted-foreground">Height</p>
+                </div>
+              )}
+              {p?.weightKg && (
+                <div className="bg-card rounded-xl border border-border p-4 text-center">
+                  <Weight size={18} className="text-primary mx-auto mb-1" />
+                  <p className="text-xl font-bold text-foreground">{p.weightKg}<span className="text-xs text-muted-foreground ml-0.5">kg</span></p>
+                  <p className="text-xs text-muted-foreground">Weight</p>
+                </div>
+              )}
+              {p?.activityLevel && (
+                <div className="bg-card rounded-xl border border-border p-4 text-center">
+                  <Activity size={18} className="text-primary mx-auto mb-1" />
+                  <p className="text-base font-bold text-foreground">{ACTIVITY_LABELS[p.activityLevel] ?? p.activityLevel}</p>
+                  <p className="text-xs text-muted-foreground">Activity</p>
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Navigation */}
-          <div className="flex items-center gap-3 mt-8">
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={() => setStep(step - 1)}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border text-foreground text-sm font-medium hover:bg-muted transition-colors"
-              >
-                <ChevronLeft size={16} />
-                Back
-              </button>
+          {/* Info cards */}
+          <div className="space-y-4">
+
+            {/* Goals */}
+            {p?.goals && p.goals.length > 0 && (
+              <Section icon={<Heart size={16} />} title="Health Goals">
+                <div className="flex flex-wrap gap-2">
+                  {p.goals.map((g) => (
+                    <span key={g} className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              </Section>
             )}
 
-            <button
-              type="button"
-              disabled={!canProceed() || saving}
-              onClick={() => {
-                if (step < TOTAL_STEPS) setStep(step + 1);
-                else handleSubmit();
-              }}
-              className="flex-1 flex items-center justify-center gap-2 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? (
-                <><Loader2 size={16} className="animate-spin" /> Saving…</>
-              ) : step < TOTAL_STEPS ? (
-                <>Continue <ChevronRight size={16} /></>
-              ) : (
-                <><Check size={16} /> Complete Setup</>
-              )}
-            </button>
-          </div>
+            {/* Dietary preference */}
+            {p?.dietaryPreference && (
+              <Section icon={<Leaf size={16} />} title="Dietary Preference">
+                <span className="px-3 py-1 rounded-full bg-muted text-foreground text-sm font-medium">
+                  {DIETARY_LABELS[p.dietaryPreference] ?? p.dietaryPreference}
+                </span>
+              </Section>
+            )}
 
-          {/* Skip for optional steps */}
-          {(step === 2) && (
-            <button
-              type="button"
-              onClick={() => setStep(step + 1)}
-              className="w-full mt-3 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Skip for now
-            </button>
-          )}
+            {/* Sleep + hydration */}
+            {(p?.sleepHours || p?.waterIntakeLitres) && (
+              <Section icon={<Moon size={16} />} title="Daily Habits">
+                <div className="flex gap-6 text-sm">
+                  {p?.sleepHours && (
+                    <span className="flex items-center gap-1.5 text-foreground">
+                      <Moon size={14} className="text-primary" />
+                      {p.sleepHours}h sleep
+                    </span>
+                  )}
+                  {p?.waterIntakeLitres && (
+                    <span className="flex items-center gap-1.5 text-foreground">
+                      <Droplets size={14} className="text-primary" />
+                      {p.waterIntakeLitres}L water
+                    </span>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {/* Allergies */}
+            {p?.allergies && p.allergies.length > 0 && (
+              <Section icon={<AlertCircle size={16} />} title="Allergies">
+                <div className="flex flex-wrap gap-2">
+                  {p.allergies.map((a) => (
+                    <span key={a} className="px-3 py-1 rounded-full bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-sm">
+                      {a}
+                    </span>
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {/* Notes */}
+            {p?.notes && (
+              <Section icon={<StickyNote size={16} />} title="Notes">
+                <p className="text-sm text-muted-foreground leading-relaxed">{p.notes}</p>
+              </Section>
+            )}
+
+            {/* Quick links */}
+            <Section icon={<Calendar size={16} />} title="Quick Actions">
+              <div className="space-y-1">
+                <Link href="/appointments" className="flex items-center justify-between py-2 text-sm text-foreground hover:text-primary transition-colors">
+                  View my appointments <ChevronRight size={14} />
+                </Link>
+                <Link href="/#contact" className="flex items-center justify-between py-2 text-sm text-foreground hover:text-primary transition-colors">
+                  Contact the nutritionist <ChevronRight size={14} />
+                </Link>
+              </div>
+            </Section>
+
+            {/* Member since */}
+            <p className="text-center text-xs text-muted-foreground pt-2">
+              Member since {new Date(profile.createdAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Edit mode ─────────────────────────────────────────────────────────────
+
+  return (
+    <div className="min-h-screen py-20 bg-background">
+      <div className="section-container max-w-3xl">
+
+        {/* Edit header */}
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-2xl font-serif font-bold text-foreground">Edit Profile</h1>
+          <button
+            onClick={() => { setEditing(false); setError(""); }}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X size={16} /> Cancel
+          </button>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          You can update this anytime from your profile settings.
-        </p>
+        <div className="space-y-6 bg-card rounded-2xl border border-border p-6">
+
+          {/* Avatar */}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-dashed border-border hover:border-primary transition-colors group flex-shrink-0"
+            >
+              {avatarPreview ? (
+                <Image src={avatarPreview} alt="Avatar" fill className="object-cover" />
+              ) : (
+                <div className="w-full h-full bg-muted flex items-center justify-center">
+                  <User size={24} className="text-muted-foreground" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Edit3 size={16} className="text-white" />
+              </div>
+            </button>
+            <div>
+              <p className="text-sm font-medium text-foreground">Profile Photo</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Click to change</p>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+          </div>
+
+          <hr className="border-border" />
+
+          {/* Basic info */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Full Name" required>
+              <input
+                type="text"
+                value={form.fullName}
+                onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                className={inputCls}
+                placeholder="Your full name"
+              />
+            </Field>
+
+            <Field label="Phone Number">
+              <div className="flex gap-2">
+                <span className="flex items-center px-3 rounded-xl border border-border bg-muted text-sm text-muted-foreground select-none">+91</span>
+                <input
+                  type="tel"
+                  value={form.phoneNumber}
+                  onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value.replace(/\D/g, "") }))}
+                  maxLength={10}
+                  className={inputCls}
+                  placeholder="98765 43210"
+                />
+              </div>
+            </Field>
+
+            <Field label="Date of Birth (to update age)">
+              <input
+                type="date"
+                value={form.dob}
+                onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+                max={new Date(Date.now() - 13 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+                className={inputCls}
+              />
+            </Field>
+
+            <Field label="Gender">
+              <select value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))} className={inputCls}>
+                <option value="">Select gender</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="OTHER">Other / Prefer not to say</option>
+              </select>
+            </Field>
+
+            <Field label="Height (cm)">
+              <input type="number" value={form.heightCm} onChange={(e) => setForm((f) => ({ ...f, heightCm: e.target.value }))} className={inputCls} placeholder="e.g. 165" min="100" max="250" />
+            </Field>
+
+            <Field label="Weight (kg)">
+              <input type="number" value={form.weightKg} onChange={(e) => setForm((f) => ({ ...f, weightKg: e.target.value }))} className={inputCls} placeholder="e.g. 65" min="30" max="300" />
+            </Field>
+
+            <Field label="Activity Level">
+              <select value={form.activityLevel} onChange={(e) => setForm((f) => ({ ...f, activityLevel: e.target.value }))} className={inputCls}>
+                <option value="">Select activity level</option>
+                {ACTIVITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+
+            <Field label="Dietary Preference">
+              <select value={form.dietaryPref} onChange={(e) => setForm((f) => ({ ...f, dietaryPref: e.target.value }))} className={inputCls}>
+                <option value="">Select preference</option>
+                {DIETARY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          {/* Health goals */}
+          <Field label="Health Goals">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
+              {HEALTH_GOALS.map((goal) => (
+                <button
+                  key={goal}
+                  type="button"
+                  onClick={() => toggleGoal(goal)}
+                  className={`py-2 px-3 rounded-xl border text-sm font-medium text-left transition-all ${
+                    form.healthGoals.includes(goal)
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {form.healthGoals.includes(goal) && <Check size={11} className="inline mr-1" />}
+                  {goal}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          {/* Daily habits */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Sleep (hours/night)">
+              <input type="number" value={form.sleepHours} onChange={(e) => setForm((f) => ({ ...f, sleepHours: e.target.value }))} className={inputCls} placeholder="e.g. 7.5" min="0" max="24" step="0.5" />
+            </Field>
+            <Field label="Water intake (litres/day)">
+              <input type="number" value={form.waterIntakeLitres} onChange={(e) => setForm((f) => ({ ...f, waterIntakeLitres: e.target.value }))} className={inputCls} placeholder="e.g. 2.5" min="0" max="10" step="0.25" />
+            </Field>
+          </div>
+
+          {/* Allergies / conditions */}
+          <Field label="Allergies" hint="Comma-separated, e.g. Peanuts, Lactose">
+            <input type="text" value={form.allergies} onChange={(e) => setForm((f) => ({ ...f, allergies: e.target.value }))} className={inputCls} placeholder="Peanuts, Lactose, Gluten…" />
+          </Field>
+
+          <Field label="Medical Conditions" hint="Comma-separated">
+            <input type="text" value={form.medicalConditions} onChange={(e) => setForm((f) => ({ ...f, medicalConditions: e.target.value }))} className={inputCls} placeholder="Diabetes, Hypertension…" />
+          </Field>
+
+          <Field label="Notes for your nutritionist">
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className={`${inputCls} resize-none`}
+              rows={3}
+              placeholder="Anything else you'd like your nutritionist to know…"
+            />
+          </Field>
+
+          {error && (
+            <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">{error}</p>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2 border-t border-border">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !form.fullName.trim()}
+              className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Check size={16} /> Save Changes</>}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEditing(false); setError(""); }}
+              className="px-4 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Small helpers ────────────────────────────────────────────────────────────
+
+const inputCls =
+  "w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm";
+
+function Section({
+  icon, title, children,
+}: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card rounded-xl border border-border p-5">
+      <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
+        <span className="text-primary">{icon}</span>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label, required, hint, children,
+}: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-foreground mb-1.5">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
 }

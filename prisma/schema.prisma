@@ -319,17 +319,26 @@ model Appointment {
   userId                  String
   user                    User                  @relation(fields: [userId], references: [id])
 
-  paymentId               String?              
+  paymentId               String?
   payment                 Payment?              @relation(fields: [paymentId], references: [id])
 
   status                  AppointmentStatus     @default(PENDING)
 
   consultationType        ConsultationType      @default(ONLINE)
 
-  requestDate             DateTime?
+  firstName               String?
+  lastName                String?
+  email                   String?
+  phone                   String?
+  age                     Int?
+  heightCm                Int?
+  reason                  String?
+  userNotes               String?
 
-  scheduledStart           DateTime?
-  scheduledEnd             DateTime?
+  requestDate             DateTime?             @default(now())
+
+  scheduledStart          DateTime?
+  scheduledEnd            DateTime?
 
   timeZone                String?
 
