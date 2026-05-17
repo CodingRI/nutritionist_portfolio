@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import {ClerkProvider} from "@clerk/nextjs"
+import { RouteLoader } from "@/components/route-loader";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -65,6 +66,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <RouteLoader/>
           <Navbar />
           <main className="pt-20">
             {children}
