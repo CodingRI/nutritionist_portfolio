@@ -62,10 +62,27 @@ const isAdminRoute = createRouteMatcher([
 // ── Middleware ────────────────────────────────────────────────────────────────
 
 export default clerkMiddleware(async (auth, req) => {
+  const pathname = req.nextUrl.pathname
+
+  if (req.method === "OPTIONS") {
+    return NextResponse.next()
+  }
+
+  if (pathname.startsWith("/api")) {
+    return NextResponse.next()
+  }
+
+
   const { userId, sessionClaims } = await auth();
 
   // 1. Public — always allow
   if (isPublicRoute(req)) return NextResponse.next();
+
+  const isApiRoute = req.nextUrl.pathname.startsWith("/api")
+
+if (isApiRoute) {
+  return NextResponse.next()
+}
 
   // 2. Any non-public route requires sign-in
   if (!userId) {
