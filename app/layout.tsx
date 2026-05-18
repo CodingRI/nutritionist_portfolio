@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Playfair_Display } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
-import {ClerkProvider} from "@clerk/nextjs"
+import { ClerkProvider } from "@clerk/nextjs";
 import { RouteLoader } from "@/components/route-loader";
 
 const geistSans = Geist({
@@ -54,28 +55,33 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} bg-background`}
-      suppressHydrationWarning
-    >
-      <body className="font-sans antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <RouteLoader/>
-          <Navbar />
-          <main className="pt-20">
-            {children}
-            </main>
-          
-        </ThemeProvider>
-        {process.env.NODE_ENV === "production" && <Analytics />}
-      </body>
-    </html>
+      <html
+        lang="en"
+        data-scroll-behavior="smooth"
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} bg-background`}
+        suppressHydrationWarning
+      >
+        <body className="font-sans antialiased">
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <Suspense fallback={null}>
+              <RouteLoader />
+            </Suspense>
+
+            <Suspense fallback={null}>
+              <Navbar />
+            </Suspense>
+
+            <main className="pt-20">{children}</main>
+          </ThemeProvider>
+
+          {process.env.NODE_ENV === "production" && <Analytics />}
+        </body>
+      </html>
     </ClerkProvider>
   );
 }
