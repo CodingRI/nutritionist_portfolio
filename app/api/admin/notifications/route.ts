@@ -12,7 +12,7 @@ export async function GET(req: Request) {
 
   try {
     const { userId: clerkUserId } = await auth();
-
+    console.log(clerkUserId);
     if (!clerkUserId) {
       return NextResponse.json(
         {
@@ -35,6 +35,9 @@ export async function GET(req: Request) {
         role: true,
       },
     });
+
+
+    
 
     if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
