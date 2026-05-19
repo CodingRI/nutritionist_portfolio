@@ -16,7 +16,7 @@ import { prisma } from "@/lib/prisma";
 
 import { clerkClient } from "@clerk/nextjs/server";
 
-import { UserRole } from "@/src/generated/prisma/client";
+import { UserRole } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -131,26 +131,16 @@ export async function POST(req: NextRequest) {
 
     if (event.type === "user.created") {
       try {
-        const {
-          id,
-          email_addresses,
-          phone_numbers,
-          first_name,
-          last_name,
-        } = event.data;
+        const { id, email_addresses, phone_numbers, first_name, last_name } =
+          event.data;
 
         const email =
-          email_addresses?.[0]?.email_address ??
-          `${id}@placeholder.clerk`;
+          email_addresses?.[0]?.email_address ?? `${id}@placeholder.clerk`;
 
-        const phoneNumber =
-          phone_numbers?.[0]?.phone_number ?? null;
+        const phoneNumber = phone_numbers?.[0]?.phone_number ?? null;
 
         const fullName =
-          [first_name, last_name]
-            .filter(Boolean)
-            .join(" ")
-            .trim() || "User";
+          [first_name, last_name].filter(Boolean).join(" ").trim() || "User";
 
         console.log("Creating DB user:", {
           clerkId: id,
@@ -261,10 +251,7 @@ export async function POST(req: NextRequest) {
 // Helper
 // ─────────────────────────────────────────────────────────────
 
-async function syncRoleToClerk(
-  clerkId: string,
-  role: UserRole
-) {
+async function syncRoleToClerk(clerkId: string, role: UserRole) {
   try {
     const client = await clerkClient();
 

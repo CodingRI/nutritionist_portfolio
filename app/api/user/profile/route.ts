@@ -3,47 +3,54 @@
 // POST — upsert on signup (about-user page)
 // PATCH — partial update from profile edit (profile page)
 
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/prisma';
-import { UserRole, Gender, DietaryPreference, ActivityLevel } from '@/src/generated/prisma/client';
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { prisma } from "@/lib/prisma";
+import {
+  UserRole,
+  Gender,
+  DietaryPreference,
+  ActivityLevel,
+} from "@prisma/client";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET() {
   const { userId: clerkId } = await auth();
-  if (!clerkId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!clerkId)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const user = await prisma.user.findUnique({
     where: { clerkId },
     select: {
-      id:          true,
-      fullName:    true,
-      email:       true,
+      id: true,
+      fullName: true,
+      email: true,
       phoneNumber: true,
-      role:        true,
-      isVerified:  true,
-      createdAt:   true,
+      role: true,
+      isVerified: true,
+      createdAt: true,
       profile: {
         select: {
-          age:               true,
-          gender:            true,
-          heightCm:          true,
-          weightKg:          true,
-          activityLevel:     true,
+          age: true,
+          gender: true,
+          heightCm: true,
+          weightKg: true,
+          activityLevel: true,
           dietaryPreference: true,
-          allergies:         true,
+          allergies: true,
           medicalConditions: true,
-          goals:             true,
-          sleepHours:        true,
+          goals: true,
+          sleepHours: true,
           waterIntakeLitres: true,
-          notes:             true,
+          notes: true,
         },
       },
     },
   });
 
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  if (!user)
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   return NextResponse.json({ success: true, user });
 }
@@ -52,10 +59,19 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const { userId: clerkId } = await auth();
-  if (!clerkId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!clerkId)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { fullName, email, phoneNumber, dob, gender, healthGoals, dietaryPref } = body;
+  const {
+    fullName,
+    email,
+    phoneNumber,
+    dob,
+    gender,
+    healthGoals,
+    dietaryPref,
+  } = body;
 
   // DOB → age in years
   let age: number | undefined;
@@ -71,14 +87,14 @@ export async function POST(req: NextRequest) {
     where: { clerkId },
     create: {
       clerkId,
-      fullName:    fullName ?? 'User',
-      email:       email   ?? `${clerkId}@placeholder.clerk`,
+      fullName: fullName ?? "User",
+      email: email ?? `${clerkId}@placeholder.clerk`,
       phoneNumber: phoneNumber ?? null,
-      role:        UserRole.FREE_USER,
-      isVerified:  true,
+      role: UserRole.FREE_USER,
+      isVerified: true,
     },
     update: {
-      fullName:    fullName    ?? undefined,
+      fullName: fullName ?? undefined,
       phoneNumber: phoneNumber ?? undefined,
     },
   });
@@ -86,17 +102,21 @@ export async function POST(req: NextRequest) {
   await prisma.profile.upsert({
     where: { userId: user.id },
     create: {
-      userId:            user.id,
-      age:               age               ?? null,
-      gender:            gender            ? (gender as Gender)                       : null,
-      dietaryPreference: dietaryPref       ? (dietaryPref as DietaryPreference)       : null,
-      goals:             healthGoals       ?? [],
+      userId: user.id,
+      age: age ?? null,
+      gender: gender ? (gender as Gender) : null,
+      dietaryPreference: dietaryPref
+        ? (dietaryPref as DietaryPreference)
+        : null,
+      goals: healthGoals ?? [],
     },
     update: {
-      age:               age               ?? undefined,
-      gender:            gender            ? (gender as Gender)              : undefined,
-      dietaryPreference: dietaryPref       ? (dietaryPref as DietaryPreference) : undefined,
-      goals:             healthGoals       ?? undefined,
+      age: age ?? undefined,
+      gender: gender ? (gender as Gender) : undefined,
+      dietaryPreference: dietaryPref
+        ? (dietaryPref as DietaryPreference)
+        : undefined,
+      goals: healthGoals ?? undefined,
     },
   });
 
@@ -107,7 +127,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const { userId: clerkId } = await auth();
-  if (!clerkId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!clerkId)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
 
@@ -141,7 +162,7 @@ export async function PATCH(req: NextRequest) {
   const user = await prisma.user.update({
     where: { clerkId },
     data: {
-      ...(fullName    && { fullName }),
+      ...(fullName && { fullName }),
       ...(phoneNumber !== undefined && { phoneNumber: phoneNumber || null }),
     },
   });
@@ -150,33 +171,39 @@ export async function PATCH(req: NextRequest) {
   await prisma.profile.upsert({
     where: { userId: user.id },
     create: {
-      userId:            user.id,
-      age:               age               ?? null,
-      gender:            gender            ? (gender as Gender)                       : null,
-      dietaryPreference: dietaryPref       ? (dietaryPref as DietaryPreference)       : null,
-      activityLevel:     activityLevel     ? (activityLevel as ActivityLevel)         : null,
-      goals:             healthGoals       ?? [],
-      heightCm:          heightCm          ? Number(heightCm)          : null,
-      weightKg:          weightKg          ? Number(weightKg)          : null,
-      allergies:         allergies         ?? [],
+      userId: user.id,
+      age: age ?? null,
+      gender: gender ? (gender as Gender) : null,
+      dietaryPreference: dietaryPref
+        ? (dietaryPref as DietaryPreference)
+        : null,
+      activityLevel: activityLevel ? (activityLevel as ActivityLevel) : null,
+      goals: healthGoals ?? [],
+      heightCm: heightCm ? Number(heightCm) : null,
+      weightKg: weightKg ? Number(weightKg) : null,
+      allergies: allergies ?? [],
       medicalConditions: medicalConditions ?? [],
-      sleepHours:        sleepHours        ? Number(sleepHours)        : null,
+      sleepHours: sleepHours ? Number(sleepHours) : null,
       waterIntakeLitres: waterIntakeLitres ? Number(waterIntakeLitres) : null,
-      notes:             notes             ?? null,
+      notes: notes ?? null,
     },
     update: {
-      ...(age               !== undefined && { age }),
-      ...(gender            && { gender:            gender            as Gender            }),
-      ...(dietaryPref       && { dietaryPreference: dietaryPref       as DietaryPreference }),
-      ...(activityLevel     && { activityLevel:     activityLevel     as ActivityLevel     }),
-      ...(healthGoals       && { goals:             healthGoals       }),
-      ...(heightCm          !== undefined && { heightCm:          Number(heightCm)          }),
-      ...(weightKg          !== undefined && { weightKg:          Number(weightKg)          }),
-      ...(allergies         && { allergies }),
+      ...(age !== undefined && { age }),
+      ...(gender && { gender: gender as Gender }),
+      ...(dietaryPref && {
+        dietaryPreference: dietaryPref as DietaryPreference,
+      }),
+      ...(activityLevel && { activityLevel: activityLevel as ActivityLevel }),
+      ...(healthGoals && { goals: healthGoals }),
+      ...(heightCm !== undefined && { heightCm: Number(heightCm) }),
+      ...(weightKg !== undefined && { weightKg: Number(weightKg) }),
+      ...(allergies && { allergies }),
       ...(medicalConditions && { medicalConditions }),
-      ...(sleepHours        !== undefined && { sleepHours:        Number(sleepHours)        }),
-      ...(waterIntakeLitres !== undefined && { waterIntakeLitres: Number(waterIntakeLitres) }),
-      ...(notes             !== undefined && { notes:             notes || null             }),
+      ...(sleepHours !== undefined && { sleepHours: Number(sleepHours) }),
+      ...(waterIntakeLitres !== undefined && {
+        waterIntakeLitres: Number(waterIntakeLitres),
+      }),
+      ...(notes !== undefined && { notes: notes || null }),
     },
   });
 

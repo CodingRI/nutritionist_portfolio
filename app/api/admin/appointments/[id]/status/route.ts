@@ -1,32 +1,32 @@
-import { NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
-import { prisma } from "@/lib/prisma"
+import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { prisma } from "@/lib/prisma";
 import {
   AppointmentStatus,
   PaymentPurpose,
   PaymentStatus,
   PaymentProvider,
   NotificationType,
-} from "@/src/generated/prisma/client"
-import { corsOptionsResponse, getCorsHeaders } from "@/lib/cors"
+} from "@prisma/client";
+import { corsOptionsResponse, getCorsHeaders } from "@/lib/cors";
 
 type RouteParams = {
   params: Promise<{
-    id: string
-  }>
-}
+    id: string;
+  }>;
+};
 
 export async function OPTIONS(req: Request) {
-  return corsOptionsResponse(req)
+  return corsOptionsResponse(req);
 }
 
 export async function PATCH(req: Request, { params }: RouteParams) {
-  const origin = req.headers.get("origin")
+  const origin = req.headers.get("origin");
 
   try {
-    const { id } = await params
+    const { id } = await params;
 
-    const { userId: clerkUserId } = await auth()
+    const { userId: clerkUserId } = await auth();
 
     if (!clerkUserId) {
       return NextResponse.json(
@@ -38,7 +38,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           status: 401,
           headers: getCorsHeaders(origin),
         }
-      )
+      );
     }
 
     const adminUser = await prisma.user.findUnique({
@@ -49,7 +49,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         id: true,
         role: true,
       },
-    })
+    });
 
     if (!adminUser || adminUser.role !== "ADMIN") {
       return NextResponse.json(
@@ -61,22 +61,22 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           status: 403,
           headers: getCorsHeaders(origin),
         }
-      )
+      );
     }
 
-    const body = await req.json()
+    const body = await req.json();
 
     const { status, adminNotes, cancellationReason, amount } = body as {
-      status?: AppointmentStatus
-      adminNotes?: string
-      cancellationReason?: string
-      amount?: number
-    }
+      status?: AppointmentStatus;
+      adminNotes?: string;
+      cancellationReason?: string;
+      amount?: number;
+    };
 
     const allowedStatuses: AppointmentStatus[] = [
       AppointmentStatus.PAYMENT_PENDING,
       AppointmentStatus.REJECTED,
-    ]
+    ];
 
     if (!status || !allowedStatuses.includes(status)) {
       return NextResponse.json(
@@ -88,7 +88,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           status: 400,
           headers: getCorsHeaders(origin),
         }
-      )
+      );
     }
 
     const existingAppointment = await prisma.appointment.findUnique({
@@ -105,7 +105,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         },
         payment: true,
       },
-    })
+    });
 
     if (!existingAppointment) {
       return NextResponse.json(
@@ -117,7 +117,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           status: 404,
           headers: getCorsHeaders(origin),
         }
-      )
+      );
     }
 
     if (existingAppointment.status !== AppointmentStatus.PENDING) {
@@ -130,10 +130,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           status: 400,
           headers: getCorsHeaders(origin),
         }
-      )
+      );
     }
 
-    const appointmentAmount = Number(amount || 500)
+    const appointmentAmount = Number(amount || 500);
 
     const result = await prisma.$transaction(async (tx) => {
       if (status === AppointmentStatus.REJECTED) {
@@ -158,7 +158,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
               },
             },
           },
-        })
+        });
 
         await tx.notification.create({
           data: {
@@ -170,12 +170,12 @@ export async function PATCH(req: Request, { params }: RouteParams) {
               "Your appointment request was rejected by the nutritionist.",
             relatedAppointmentId: existingAppointment.id,
           },
-        })
+        });
 
         return {
           appointment: rejectedAppointment,
           payment: null,
-        }
+        };
       }
 
       const payment = await tx.payment.create({
@@ -187,7 +187,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           status: PaymentStatus.PENDING,
           purpose: PaymentPurpose.APPOINTMENT,
         },
-      })
+      });
 
       const updatedAppointment = await tx.appointment.update({
         where: {
@@ -210,7 +210,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           },
           payment: true,
         },
-      })
+      });
 
       await tx.notification.create({
         data: {
@@ -220,13 +220,13 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           message: `Your appointment request has been verified. Please complete the payment of ₹${appointmentAmount}.`,
           relatedAppointmentId: existingAppointment.id,
         },
-      })
+      });
 
       return {
         appointment: updatedAppointment,
         payment,
-      }
-    })
+      };
+    });
 
     return NextResponse.json(
       {
@@ -242,9 +242,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         status: 200,
         headers: getCorsHeaders(origin),
       }
-    )
+    );
   } catch (error) {
-    console.error("UPDATE_APPOINTMENT_STATUS_ERROR:", error)
+    console.error("UPDATE_APPOINTMENT_STATUS_ERROR:", error);
 
     return NextResponse.json(
       {
@@ -255,6 +255,6 @@ export async function PATCH(req: Request, { params }: RouteParams) {
         status: 500,
         headers: getCorsHeaders(origin),
       }
-    )
+    );
   }
 }
