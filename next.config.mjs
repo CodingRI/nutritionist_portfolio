@@ -6,6 +6,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+    allowedDevOrigins : ['app.nourishwell.localhost']
 }
 
 export default nextConfig

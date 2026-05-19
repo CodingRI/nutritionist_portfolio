@@ -1,6 +1,8 @@
 const allowedOrigins = [
     "http://localhost:3001",
     "https://dashboard.nourishwell.com",
+    "https://dashboard.nourishwell.localhost:3001",
+    "https://dashboard.nourishwell.in",
   ]
   
   export function getCorsHeaders(origin: string | null) {
