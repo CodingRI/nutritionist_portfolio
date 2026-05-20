@@ -135,7 +135,7 @@ export function Navbar() {
             {/* Admin link — only visible to admins */}
             {isAdmin && (
               <Link
-                href="http://localhost:3001/dashboard"
+                href={adminDashboardUrl}
                 className="relative text-sm font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
               >
                 <Shield size={14} /> Admin
