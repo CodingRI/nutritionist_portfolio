@@ -133,7 +133,7 @@ export default function ProfilePage() {
 
       if (!data.success || !data.user) {
         // No profile yet → send to onboarding
-        router.push("/about-user");
+        router.push("/profile");
         return;
       }
 
