@@ -9,6 +9,7 @@ import {
   NotificationType,
 } from "@prisma/client";
 import { corsOptionsResponse, getCorsHeaders } from "@/lib/cors";
+import { sendAppointmentPaymentEmail } from "@/lib/email-actions/send-appointment-payment-email";
 
 type RouteParams = {
   params: Promise<{
@@ -211,16 +212,23 @@ export async function PATCH(req: Request, { params }: RouteParams) {
           payment: true,
         },
       });
+await tx.notification.create({
+  data: {
+    userId: existingAppointment.userId,
+    type: NotificationType.PAYMENT_REQUEST,
+    title: "Payment requested for appointment",
+    message: `Your appointment request has been verified. Please complete the payment of ₹${appointmentAmount}.`,
+    relatedAppointmentId: existingAppointment.id,
+  },
+});
 
-      await tx.notification.create({
-        data: {
-          userId: existingAppointment.userId,
-          type: NotificationType.PAYMENT_REQUEST,
-          title: "Payment requested for appointment",
-          message: `Your appointment request has been verified. Please complete the payment of ₹${appointmentAmount}.`,
-          relatedAppointmentId: existingAppointment.id,
-        },
-      });
+await sendAppointmentPaymentEmail({
+  to: existingAppointment.user.email,
+
+  userName: existingAppointment.user.fullName,
+
+  amount: appointmentAmount,
+});
 
       return {
         appointment: updatedAppointment,
