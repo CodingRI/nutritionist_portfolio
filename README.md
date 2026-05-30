@@ -54,47 +54,9 @@ Any time a role changes (on signup or post-payment), the system writes to Prisma
 
 ---
 
-## Project Structure
+## Project Architecture Overview
 
-```
-nutritionist-fe/
-├── app/
-│   ├── page.tsx                   # Public landing page
-│   ├── layout.tsx                 # Root layout (Clerk Provider, Theme)
-│   ├── about-user/                # Onboarding health profile form
-│   ├── profile/                   # User profile view + edit
-│   ├── blogs/                     # Blog listing
-│   ├── recipes/                   # Recipe listing
-│   ├── sso-callback/              # Clerk SSO redirect handler
-│   └── api/
-│       ├── webhooks/
-│       │   └── clerk/             # Handles user.created, user.updated
-│       ├── user/
-│       │   ├── profile/           # GET + PATCH user profile
-│       │   └── promote/           # POST: upgrade role after payment
-│       ├── appointments/          # POST: user submits appointment request
-│       ├── admin/
-│       │   ├── appointments/      # GET all appointments + [id]/status, [id]/schedule
-│       │   ├── users/             # GET all users with profiles + subscriptions
-│       │   └── notifications/     # GET admin notifications + unread count
-│       ├── blogs/                 # Blog CRUD
-│       └── recipes/               # Recipe CRUD
-├── components/
-│   ├── navbar.tsx                 # Role-aware nav with admin link
-│   ├── auth-modal.tsx             # Clerk sign-in/up modal wrapper
-│   ├── booking-modal.tsx          # Appointment booking form
-│   ├── chat-widget.tsx            # Embedded chat interface
-│   ├── hero-section.tsx           # Landing page hero
-│   └── ...                        # Other marketing sections
-├── hooks/
-│   └── useUserRole.ts             # Client-side role helper
-├── middleware.ts                  # Edge route protection
-├── prisma/
-│   └── schema.prisma              # Full DB schema
-└── lib/
-    ├── prisma.ts                  # Prisma client singleton
-    └── cors.ts                    # CORS headers for cross-origin API calls
-```
+<img width="565" height="590" alt="Screenshot 2026-05-30 at 11 52 45 PM" src="https://github.com/user-attachments/assets/3badd343-346d-42ff-b5ef-b40e77300578" />
 
 ---
 
